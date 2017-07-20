@@ -38,6 +38,7 @@ cdef extern from *:
     ctypedef int PoolingMode 'cudnnPoolingMode_t'
     ctypedef int RNNInputMode 'cudnnRNNInputMode_t'
     ctypedef int RNNMode 'cudnnRNNMode_t'
+    ctypedef int RNNAlgo 'cudnnRNNAlgo_t'
     ctypedef int SoftmaxAlgorithm 'cudnnSoftmaxAlgorithm_t'
     ctypedef int SoftmaxMode 'cudnnSoftmaxMode_t'
     ctypedef int Status 'cudnnStatus_t'
@@ -50,6 +51,7 @@ cdef extern from *:
     ctypedef void* Handle 'cudnnHandle_t'
     ctypedef void* PoolingDescriptor 'cudnnPoolingDescriptor_t'
     ctypedef void* RNNDescriptor 'cudnnRNNDescriptor_t'
+    ctypedef void* PersistentRNNPlan 'cudnnPersistentRNNPlan_t'
     ctypedef void* TensorDescriptor 'cudnnTensorDescriptor_t'
     ctypedef void* SpatialTransformerDescriptor \
         'cudnnSpatialTransformerDescriptor_t'
@@ -149,6 +151,10 @@ cpdef enum:
 
     CUDNN_LINEAR_INPUT = 0
     CUDNN_SKIP_INPUT = 1
+
+    CUDNN_RNN_ALGO_STANDARD = 0
+    CUDNN_RNN_ALGO_PERSIST_STATIC = 1
+    CUDNN_RNN_ALGO_PERSIST_DYNAMIC = 2
 
     CUDNN_SAMPLER_BILINEAR = 0
 

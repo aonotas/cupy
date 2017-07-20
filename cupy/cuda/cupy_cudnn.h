@@ -545,6 +545,27 @@ cudnnStatus_t cudnnConvolutionBackwardData_v2(...) {
 
 #define cudnnSetConvolution2dDescriptor_v4 cudnnSetConvolution2dDescriptor
 
+// Persistent RNN (version < 6000)
+typedef enum {} cudnnRNNAlgo_t;
+typedef void* cudnnPersistentRNNPlan_t;
+
+
+cudnnStatus_t cudnnCreatePersistentRNNPlan(...) {
+    return CUDNN_STATUS_NOT_SUPPORTED;
+}
+
+cudnnStatus_t cudnnSetPersistentRNNPlan(...) {
+    return CUDNN_STATUS_NOT_SUPPORTED;
+}
+
+cudnnStatus_t cudnnDestroyPersistentRNNPlan(...) {
+    return CUDNN_STATUS_NOT_SUPPORTED;
+}
+
+cudnnStatus_t cudnnSetRNNDescriptor_v6(...) {
+    return CUDNN_STATUS_NOT_SUPPORTED;
+}
+
 #endif // #if !defined(CUPY_NO_CUDA) && (CUDNN_VERSION < 6000)
 
 
