@@ -308,14 +308,17 @@ def create_rnn_descriptor(hidden_size, num_layers, dropout_desc,
 
 def create_rnn_descriptor_v6(handle,
                              hidden_size, num_layers, dropout_desc,
-                             input_mode, direction, mode, algo, data_type,
-                             minibatch):
+                             input_mode, direction, mode, algo, data_type):
     desc = Descriptor(cudnn.createRNNDescriptor(),
                       cudnn.destroyRNNDescriptor)
     cudnn.setRNNDescriptor_v6(
         handle, desc.value, hidden_size, num_layers, dropout_desc.value,
-        input_mode, direction, algo, mode, data_type)
-    # Persistent RNN
+        input_mode, direction, mode, algo, data_type)
+    return desc
+
+
+def create_rnn_persistent_rnn_plan(desc, data_type, minibatch):
+    # Persistent RNN (when algo == 'CUDNN_RNN_ALGO_PERSIST_DYNAMIC')
     plan = Descriptor(cudnn.createPersistentRNNPlan(desc.value, minibatch,
                                                     data_type),
                       cudnn.destroyPersistentRNNPlan)
