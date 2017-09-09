@@ -1,6 +1,7 @@
 # distutils: language = c++
 
 import numpy
+import six
 
 cimport cpython
 from libcpp cimport vector
@@ -57,7 +58,17 @@ cdef class CInt64(CPointer):
         self.ptr = <void*>&self.val
 
 
-cdef set _pointer_numpy_types = {numpy.dtype(i).type for i in '?bhilqBHILQefd'}
+cdef class CInt128(CPointer):
+    cdef:
+        double complex val
+
+    def __init__(self, double complex v):
+        self.val = v
+        self.ptr = <void*>&self.val
+
+
+cdef set _pointer_numpy_types = {numpy.dtype(i).type
+                                 for i in '?bhilqBHILQefdFD'}
 
 
 cdef inline CPointer _pointer(x):
@@ -69,6 +80,16 @@ cdef inline CPointer _pointer(x):
     if isinstance(x, core.Indexer):
         return (<core.Indexer>x).get_pointer()
 
+    if type(x) not in _pointer_numpy_types:
+        if isinstance(x, six.integer_types):
+            x = numpy.int64(x)
+        elif isinstance(x, float):
+            x = numpy.float64(x)
+        elif isinstance(x, bool):
+            x = numpy.bool_(x)
+        else:
+            raise TypeError('Unsupported type %s' % type(x))
+
     itemsize = x.itemsize
     if itemsize == 1:
         return CInt8(x.view(numpy.int8))
@@ -78,6 +99,8 @@ cdef inline CPointer _pointer(x):
         return CInt32(x.view(numpy.int32))
     if itemsize == 8:
         return CInt64(x.view(numpy.int64))
+    if itemsize == 16:
+        return CInt128(x.view(numpy.complex128))
     raise TypeError('Unsupported type %s. (size=%d)', type(x), itemsize)
 
 
@@ -85,9 +108,9 @@ cdef inline size_t _get_stream(strm) except *:
     return 0 if strm is None else strm.ptr
 
 
-cdef void _launch(size_t func, int grid0, int grid1, int grid2,
-                  int block0, int block1, int block2,
-                  args, int shared_mem, size_t stream) except *:
+cdef void _launch(size_t func, Py_ssize_t grid0, int grid1, int grid2,
+                  Py_ssize_t block0, int block1, int block2,
+                  args, Py_ssize_t shared_mem, size_t stream) except *:
     cdef list pargs = []
     cdef vector.vector[void*] kargs
     cdef CPointer cp
@@ -98,8 +121,8 @@ cdef void _launch(size_t func, int grid0, int grid1, int grid2,
         kargs.push_back(cp.ptr)
 
     driver.launchKernel(
-        func, grid0, grid1, grid2, block0, block1, block2,
-        shared_mem, stream, <size_t>&(kargs[0]), <size_t>0)
+        func, <int>grid0, grid1, grid2, <int>block0, block1, block2,
+        <int>shared_mem, stream, <size_t>&(kargs[0]), <size_t>0)
 
 
 cdef class Function:

@@ -5,6 +5,7 @@ import cupy
 from cupy import cuda
 from cupy.cuda import cublas
 from cupy.cuda import device
+from cupy.linalg import util
 
 if cuda.cusolver_enabled:
     from cupy.cuda import cusolver
@@ -21,15 +22,18 @@ def cholesky(a):
     Args:
         a (cupy.ndarray): The input matrix with dimension ``(N, N)``
 
+    Returns:
+        cupy.ndarray: The lower-triangular matrix.
+
     .. seealso:: :func:`numpy.linalg.cholesky`
     '''
     if not cuda.cusolver_enabled:
         raise RuntimeError('Current cupy only supports cusolver in CUDA 8.0')
 
     # TODO(Saito): Current implementation only accepts two-dimensional arrays
-    _assert_cupy_array(a)
-    _assert_rank2(a)
-    _assert_nd_squareness(a)
+    util._assert_cupy_array(a)
+    util._assert_rank2(a)
+    util._assert_nd_squareness(a)
 
     # Cast to float32 or float64
     if a.dtype.char == 'f' or a.dtype.char == 'd':
@@ -63,7 +67,7 @@ def cholesky(a):
     elif status < 0:
         raise linalg.LinAlgError(
             'Parameter error (maybe caused by a bug in cupy.linalg?)')
-    _tril(x, k=0)
+    util._tril(x, k=0)
     return x
 
 
@@ -77,9 +81,15 @@ def qr(a, mode='reduced'):
         a (cupy.ndarray): The input matrix.
         mode (str): The mode of decomposition. Currently 'reduced',
             'complete', 'r', and 'raw' modes are supported. The default mode
-            is 'reduced', and decompose a matrix ``A = (M, N)`` into ``Q``,
-            ``R`` with dimensions ``(M, K)``, ``(K, N)``, where
+            is 'reduced', in which matrix ``A = (M, N)`` is decomposed into
+            ``Q``, ``R`` with dimensions ``(M, K)``, ``(K, N)``, where
             ``K = min(M, N)``.
+
+    Returns:
+        cupy.ndarray, or tuple of ndarray:
+            Although the type of returned object depends on the mode,
+            it returns a tuple of ``(Q, R)`` by default.
+            For details, please see the document of :func:`numpy.linalg.qr`.
 
     .. seealso:: :func:`numpy.linalg.qr`
     '''
@@ -87,8 +97,8 @@ def qr(a, mode='reduced'):
         raise RuntimeError('Current cupy only supports cusolver in CUDA 8.0')
 
     # TODO(Saito): Current implementation only accepts two-dimensional arrays
-    _assert_cupy_array(a)
-    _assert_rank2(a)
+    util._assert_cupy_array(a)
+    util._assert_rank2(a)
 
     if mode not in ('reduced', 'complete', 'r', 'raw'):
         if mode in ('f', 'full', 'e', 'economic'):
@@ -130,7 +140,7 @@ def qr(a, mode='reduced'):
 
     if mode == 'r':
         r = x[:, :mn].transpose()
-        return _triu(r)
+        return util._triu(r)
 
     if mode == 'raw':
         if a.dtype.char == 'f':
@@ -167,7 +177,7 @@ def qr(a, mode='reduced'):
 
     q = q[:mc].transpose()
     r = x[:, :mc].transpose()
-    return q, _triu(r)
+    return q, util._triu(r)
 
 
 def svd(a, full_matrices=True, compute_uv=True):
@@ -179,11 +189,15 @@ def svd(a, full_matrices=True, compute_uv=True):
 
     Args:
         a (cupy.ndarray): The input matrix with dimension ``(M, N)``.
-        full_matrices (bool): If True, it returns U and V with dimensions
-            ``(M, M)`` and ``(N, N)``. Otherwise, the dimensions of U and V
+        full_matrices (bool): If True, it returns u and v with dimensions
+            ``(M, M)`` and ``(N, N)``. Otherwise, the dimensions of u and v
             are respectively ``(M, K)`` and ``(K, N)``, where
             ``K = min(M, N)``.
         compute_uv (bool): If True, it only returns singular values.
+
+    Returns:
+        tuple of :class:`cupy.ndarray`:
+            A tuple of ``(u, s, v)`` such that ``a = u * np.diag(s) * v``.
 
     .. seealso:: :func:`numpy.linalg.svd`
     '''
@@ -191,8 +205,8 @@ def svd(a, full_matrices=True, compute_uv=True):
         raise RuntimeError('Current cupy only supports cusolver in CUDA 8.0')
 
     # TODO(Saito): Current implementation only accepts two-dimensional arrays
-    _assert_cupy_array(a)
-    _assert_rank2(a)
+    util._assert_cupy_array(a)
+    util._assert_rank2(a)
 
     # Cast to float32 or float64
     if a.dtype.char == 'f' or a.dtype.char == 'd':
@@ -263,43 +277,3 @@ def svd(a, full_matrices=True, compute_uv=True):
             return vt, s, u
     else:
         return s
-
-
-def _assert_cupy_array(*arrays):
-    for a in arrays:
-        if not isinstance(a, cupy.core.ndarray):
-            raise linalg.LinAlgError(
-                'cupy.linalg only supports cupy.core.ndarray')
-
-
-def _assert_rank2(*arrays):
-    for a in arrays:
-        if a.ndim != 2:
-            raise linalg.LinAlgError(
-                '{}-dimensional array given. Array must be '
-                'two-dimensional'.format(a.ndim))
-
-
-def _assert_nd_squareness(*arrays):
-    for a in arrays:
-        if max(a.shape[-2:]) != min(a.shape[-2:]):
-            raise linalg.LinAlgError(
-                'Last 2 dimensions of the array must be square')
-
-
-def _tril(x, k=0):
-    m, n = x.shape
-    u = cupy.arange(m).reshape(m, 1)
-    v = cupy.arange(n).reshape(1, n)
-    mask = v - u <= k
-    x *= mask
-    return x
-
-
-def _triu(x, k=0):
-    m, n = x.shape
-    u = cupy.arange(m).reshape(m, 1)
-    v = cupy.arange(n).reshape(1, n)
-    mask = v - u >= k
-    x *= mask
-    return x

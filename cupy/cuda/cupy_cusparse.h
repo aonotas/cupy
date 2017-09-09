@@ -21,6 +21,7 @@ typedef enum {} cusparseMatrixType_t;
 typedef enum {} cusparseOperation_t;
 typedef enum {} cusparsePointerMode_t;
 typedef enum {} cusparseAction_t;
+typedef enum {} cusparseDirection_t;
 
 // cuSPARSE Helper Function
 cusparseStatus_t cusparseCreate(...) {
@@ -32,6 +33,10 @@ cusparseStatus_t cusparseCreateMatDescr(...) {
 }
 
 cusparseStatus_t cusparseDestroy(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseDestroyMatDescr(...) {
   return CUSPARSE_STATUS_SUCCESS;
 }
 
@@ -116,6 +121,14 @@ cusparseStatus_t cusparseXcoo2csr(...) {
   return CUSPARSE_STATUS_SUCCESS;
 }
 
+cusparseStatus_t cusparseScsc2dense(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseDcsc2dense(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
 cusparseStatus_t cusparseXcsr2coo(...) {
   return CUSPARSE_STATUS_SUCCESS;
 }
@@ -133,6 +146,30 @@ cusparseStatus_t cusparseScsr2dense(...) {
 }
 
 cusparseStatus_t cusparseDcsr2dense(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseSdense2csc(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseDdense2csc(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseSdense2csr(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseDdense2csr(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseSnnz(...) {
+  return CUSPARSE_STATUS_SUCCESS;
+}
+
+cusparseStatus_t cusparseDnnz(...) {
   return CUSPARSE_STATUS_SUCCESS;
 }
 

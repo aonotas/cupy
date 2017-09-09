@@ -37,6 +37,8 @@ cdef dict _typenames_base = {
     numpy.dtype('float64'): 'double',
     numpy.dtype('float32'): 'float',
     numpy.dtype('float16'): 'float16',
+    numpy.dtype('complex128'): 'complex<double>',
+    numpy.dtype('complex64'): 'complex<float>',
     numpy.dtype('int64'): 'long long',
     numpy.dtype('int32'): 'int',
     numpy.dtype('int16'): 'short',
@@ -48,13 +50,31 @@ cdef dict _typenames_base = {
     numpy.dtype('bool'): 'bool',
 }
 
-cdef str _all_type_chars = 'dfeqlihbQLIHB?'
+cdef str _all_type_chars = 'dfDFeqlihbQLIHB?'
+# for c in 'dDfFeqlihbQLIHB?':
+#    print('#', c, '...', np.dtype(c).name)
+# d ... float64
+# D ... complex128
+# f ... float32
+# F ... complex64
+# e ... float16
+# q ... int64
+# l ... int64
+# i ... int32
+# h ... int16
+# b ... int8
+# Q ... uint64
+# L ... uint64
+# I ... uint32
+# H ... uint16
+# B ... uint8
+# ? ... bool
 
 cdef dict _typenames = {
     numpy.dtype(i).type: _typenames_base[numpy.dtype(i)]
     for i in _all_type_chars}
 
-cdef tuple _python_scalar_type = six.integer_types + (float, bool)
+cdef tuple _python_scalar_type = six.integer_types + (float, bool, complex)
 cdef tuple _numpy_scalar_type = tuple([numpy.dtype(i).type
                                        for i in _all_type_chars])
 
@@ -66,11 +86,13 @@ cdef dict _kind_score = {
     'u': 1,
     'i': 1,
     'f': 2,
+    'c': 3,
 }
 
 
 cdef dict _python_type_to_numpy_type = {
     float: numpy.dtype(float).type,
+    complex: numpy.dtype(complex).type,
     bool: numpy.dtype(bool).type}
 for i in six.integer_types:
     _python_type_to_numpy_type[i] = numpy.int64
@@ -268,7 +290,7 @@ def _decide_params_type(in_params, out_params, in_args_dtype, out_args_dtype):
     type_dict = {}
     if out_args_dtype:
         assert len(out_params) == len(out_args_dtype)
-        for p, a in six.moves.zip(out_params, out_args_dtype):
+        for p, a in zip(out_params, out_args_dtype):
             if a is None:
                 raise TypeError('Output arguments must be cupy.ndarray')
             if p.dtype is not None:
@@ -286,7 +308,7 @@ def _decide_params_type(in_params, out_params, in_args_dtype, out_args_dtype):
 
     assert len(in_params) == len(in_args_dtype)
     unknown_ctype = []
-    for p, a in six.moves.zip(in_params, in_args_dtype):
+    for p, a in zip(in_params, in_args_dtype):
         if a is None:
             if p.dtype is None:
                 unknown_ctype.append(p.ctype)
@@ -398,7 +420,7 @@ def _get_elementwise_kernel(args_info, types, params, operation, name,
     preamble = types_preamble + '\n' + preamble
 
     op = []
-    for p, a in six.moves.zip(params, args_info):
+    for p, a in zip(params, args_info):
         if not p.raw and a[0] == ndarray:
             if p.is_const:
                 fmt = '{t} &{n} = _raw_{n}[_ind.get()];'
@@ -451,9 +473,9 @@ cdef class ElementwiseKernel:
     cdef:
         readonly tuple in_params
         readonly tuple out_params
-        readonly int nin
-        readonly int nout
-        readonly int nargs
+        readonly Py_ssize_t nin
+        readonly Py_ssize_t nout
+        readonly Py_ssize_t nargs
         readonly tuple params
         readonly str operation
         readonly str name
@@ -569,12 +591,13 @@ def _get_ufunc_kernel(
         types.append('typedef %s in%d_type;' % (_get_typename(x), i))
         if args_info[i][0] is ndarray:
             op.append(
-                'const in{0}_type in{0} = _raw_in{0}[_ind.get()];'.format(i))
+                'const in{0}_type in{0}(_raw_in{0}[_ind.get()]);'
+                .format(i))
 
     for i, x in enumerate(out_types):
-        types.append('typedef %s out%d_type;' % (_get_typename(x), i))
-        op.append('{1} &out{0} = _raw_out{0}[_ind.get()];'.format(
-            i, _get_typename(args_info[i + len(in_types)][1])))
+        types.append('typedef %s out%d_type;' % (
+            _get_typename(args_info[i + len(in_types)][1]), i))
+        op.append('out{0}_type &out{0} = _raw_out{0}[_ind.get()];'.format(i))
 
     op.append(routine)
     operation = '\n'.join(op)
@@ -653,7 +676,10 @@ cdef tuple _guess_routine(str name, dict cache, list ops, list in_args, dtype):
 
     if op:
         return op
-    raise TypeError('Wrong type of arguments for %s' % name)
+    if dtype is None:
+        dtype = tuple([i.dtype.type for i in in_args])
+    raise TypeError('Wrong type (%s) of arguments for %s' %
+                    (dtype, name))
 
 
 class ufunc(object):
@@ -704,7 +730,9 @@ class ufunc(object):
         return types
 
     def __call__(self, *args, **kwargs):
-        """Applies the universal function to arguments elementwise.
+        """__call__(*args, **kwargs)
+
+        Applies the universal function to arguments elementwise.
 
         Args:
             args: Input arguments. Each of them can be a :class:`cupy.ndarray`

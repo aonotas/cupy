@@ -19,6 +19,14 @@ except ImportError:
 
     six.reraise(ImportError, ImportError(msg), exc_info[2])
 
+
+from cupy import cuda
+
+
+def is_available():
+    return cuda.is_available()
+
+
 __version__ = pkg_resources.get_distribution('cupy').version
 
 
@@ -273,8 +281,11 @@ from numpy import base_repr  # NOQA
 # -----------------------------------------------------------------------------
 # Linear algebra
 # -----------------------------------------------------------------------------
+from cupy.linalg.einsum import einsum  # NOQA
+
 from cupy.linalg.product import dot  # NOQA
 from cupy.linalg.product import inner  # NOQA
+from cupy.linalg.product import kron  # NOQA
 from cupy.linalg.product import matmul  # NOQA
 from cupy.linalg.product import outer  # NOQA
 from cupy.linalg.product import tensordot  # NOQA
@@ -370,6 +381,12 @@ from cupy.core.fusion import remainder as mod  # NOQA
 from cupy.core.fusion import subtract  # NOQA
 from cupy.core.fusion import true_divide  # NOQA
 
+# TODO(okuta): implement fusion function
+from cupy.core import angle  # NOQA
+from cupy.core import conj  # NOQA
+from cupy.core import imag  # NOQA
+from cupy.core import real  # NOQA
+
 from cupy.core.fusion import abs  # NOQA
 from cupy.core.fusion import absolute  # NOQA
 from cupy.core.fusion import clip  # NOQA
@@ -401,6 +418,7 @@ from cupy.sorting.search import argmin  # NOQA
 from cupy.sorting.sort import argsort  # NOQA
 from cupy.sorting.sort import lexsort  # NOQA
 from cupy.sorting.sort import msort  # NOQA
+from cupy.sorting.sort import partition  # NOQA
 from cupy.sorting.sort import sort  # NOQA
 
 # -----------------------------------------------------------------------------

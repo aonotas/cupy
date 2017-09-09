@@ -1,3 +1,4 @@
+import mock
 import numpy
 import six
 import unittest
@@ -65,7 +66,7 @@ class TestFusionComparison(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_binary(self, name, xp, dtype):
@@ -129,14 +130,14 @@ class TestFusionOps(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
         a = testing.shaped_arange((2, 3), xp, dtype)
         return (a,)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_binary(self, name, xp, dtype):
@@ -162,14 +163,14 @@ class TestFusionTrigonometric(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
         a = testing.shaped_arange((2, 3), xp, dtype)
         return (a,)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_binary(self, name, xp, dtype):
@@ -220,7 +221,7 @@ class TestFusionHyperbolic(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
@@ -265,7 +266,7 @@ class TestFusionRounding(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
@@ -303,14 +304,14 @@ class TestFusionExplog(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
         a = testing.shaped_arange((2, 3), xp, dtype)
         return (a,)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_binary(self, name, xp, dtype):
@@ -354,14 +355,14 @@ class TestFusionFloating(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
         a = testing.shaped_arange((2, 3), xp, dtype)
         return (a,)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_binary(self, name, xp, dtype):
@@ -414,14 +415,14 @@ class TestFusionArithmetic(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_unary(self, name, xp, dtype):
         a = testing.shaped_arange((2, 3), xp, dtype)
         return (a,)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     @fusion_default_array_equal()
     def check_binary(self, name, xp, dtype):
@@ -647,7 +648,7 @@ class TestFusionUfunc(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(ret0.get(), ret1.get())
 
     @testing.for_all_dtypes_combination(
-        names=['src_dtype', 'dst_dtype'], full=True)
+        names=['src_dtype', 'dst_dtype'], full=True, no_complex=True)
     def test_out_arg(self, src_dtype, dst_dtype):
 
         def func(x, y, z):
@@ -808,7 +809,7 @@ class TestFusionMisc(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     def check_unary(self, name, xp, dtype, no_bool=False):
         if no_bool and numpy.dtype(dtype).char == '?':
@@ -821,7 +822,7 @@ class TestFusionMisc(unittest.TestCase):
 
         return g(a)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(atol=1e-5)
     def check_binary(self, name, xp, dtype, no_bool=False):
         if no_bool and numpy.dtype(dtype).char == '?':
@@ -857,7 +858,7 @@ class TestFusionMisc(unittest.TestCase):
                      dtype=dtype)
         return a, b
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_external_clip(self, xp, dtype):
         a = testing.shaped_arange((2, 3, 4), xp, dtype)
@@ -919,7 +920,7 @@ class TestFusionFuse(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse1(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -934,7 +935,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse2(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -949,7 +950,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_bool=True, no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse3(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -1015,7 +1016,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse7(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -1033,7 +1034,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c, a, b, c)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse8(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -1051,7 +1052,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c)
 
-    @testing.for_all_dtypes(no_bool=True)
+    @testing.for_all_dtypes(no_bool=True, no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse9(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -1069,7 +1070,7 @@ class TestFusionFuse(unittest.TestCase):
         g(a, b, c)
         return a
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse10(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -1085,7 +1086,7 @@ class TestFusionFuse(unittest.TestCase):
         g(a, b, c)
         return c
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_fuse11(self, xp, dtype):
         a = xp.array([2, 2, 2, 2, 3, 3, 3, 3], dtype=dtype)
@@ -1131,7 +1132,7 @@ class TestFusionFuse(unittest.TestCase):
         g(a, b)
         return a
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_reduce1(self, xp, dtype):
         a = xp.array([[2, 2, 2, 2], [3, 3, 3, 3]], dtype=dtype)
@@ -1144,7 +1145,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_reduce2(self, xp, dtype):
         a = xp.array([[2, 2, 2, 2], [3, 3, 3, 3]], dtype=dtype)
@@ -1157,7 +1158,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c, axis=0)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_reduce3(self, xp, dtype):
         a = xp.array([[2, 2, 2, 2], [3, 3, 3, 3]], dtype=dtype)
@@ -1170,7 +1171,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, b, c, axis=1)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_reduce4(self, xp, dtype):
         a = xp.array([[2, 2, 2, 2], [3, 3, 3, 3]], dtype=dtype)
@@ -1181,7 +1182,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_reduce5(self, xp, dtype):
         a = xp.array([[2, 2, 2, 2], [3, 3, 3, 3]], dtype=dtype)
@@ -1192,7 +1193,7 @@ class TestFusionFuse(unittest.TestCase):
 
         return g(a, axis=0)
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_reduce6(self, xp, dtype):
         a = xp.array([[2, 2, 2, 2], [3, 3, 3, 3]], dtype=dtype)
@@ -1231,3 +1232,70 @@ class TestFusionDecorator(unittest.TestCase):
 
         a = xp.array([1])
         return func_w_paren(a)
+
+
+@testing.gpu
+class TestFusionKernelName(unittest.TestCase):
+
+    def check(self, xp, func, expected_name, is_elementwise):
+        a = xp.array([2, 3], 'f')
+        b = xp.array([2, 3], 'f')
+        c = xp.array([2, 3], 'f')
+
+        # Test kernel name (with mock)
+        if xp is cupy:
+            target = (
+                'cupy.core.core.ElementwiseKernel' if is_elementwise
+                else 'cupy.core.core.ReductionKernel')
+
+            with mock.patch(target) as Kernel:
+                func(a, b, c)
+                Kernel.assert_called_once()
+                self.assertEqual(Kernel.call_args[1]['name'], expected_name)
+
+        # Test there's no error in computation (without mock)
+        return func(a, b, c)
+
+    @testing.numpy_cupy_array_equal()
+    def test_elementwise(self, xp):
+        def func(a, b, c):
+            @cupy.fuse()
+            def func_a1(x, y, z):
+                return (x + y) * z
+
+            return func_a1(a, b, c)
+
+        return self.check(xp, func, 'func_a1', True)
+
+    @testing.numpy_cupy_array_equal()
+    def test_elementwise_with_name(self, xp):
+        def func(a, b, c):
+            @cupy.fuse(kernel_name='abc')
+            def func_a1(x, y, z):
+                return (x + y) * z
+
+            return func_a1(a, b, c)
+
+        return self.check(xp, func, 'abc', True)
+
+    @testing.numpy_cupy_array_equal()
+    def test_reduction(self, xp):
+        def func(a, b, c):
+            @cupy.fuse(reduce=cupy.sum)
+            def func_a1(x, y, z):
+                return (x + y) * z
+
+            return func_a1(a, b, c)
+
+        return self.check(xp, func, 'func_a1', False)
+
+    @testing.numpy_cupy_array_equal()
+    def test_reduction_with_name(self, xp):
+        def func(a, b, c):
+            @cupy.fuse(reduce=cupy.sum, kernel_name='abc')
+            def func_a1(x, y, z):
+                return (x + y) * z
+
+            return func_a1(a, b, c)
+
+        return self.check(xp, func, 'abc', False)

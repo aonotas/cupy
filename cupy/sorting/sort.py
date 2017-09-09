@@ -5,25 +5,32 @@ if cupy.cuda.thrust_enabled:
     from cupy.cuda import thrust
 
 
-def sort(a):
+def sort(a, axis=-1):
     """Returns a sorted copy of an array with a stable sorting algorithm.
 
     Args:
         a (cupy.ndarray): Array to be sorted.
+        axis (int or None): Axis along which to sort. Default is -1, which
+            means sort along the last axis. If None is supplied, the array is
+            flattened before sorting.
 
     Returns:
         cupy.ndarray: Array of the same type and shape as ``a``.
 
     .. note::
        For its implementation reason, ``cupy.sort`` currently does not support
-       ``axis``, ``kind`` and ``order`` parameters that ``numpy.sort`` does
+       ``kind`` and ``order`` parameters that ``numpy.sort`` does
        support.
 
     .. seealso:: :func:`numpy.sort`
 
     """
-    ret = a.copy()
-    ret.sort()
+    if axis is None:
+        ret = a.flatten()
+        axis = -1
+    else:
+        ret = a.copy()
+    ret.sort(axis=axis)
     return ret
 
 
@@ -74,24 +81,26 @@ def lexsort(keys):
     return idx_array
 
 
-def argsort(a):
-    """Return the indices that would sort an array with a stable sorting.
+def argsort(a, axis=-1):
+    """Returns the indices that would sort an array with a stable sorting.
 
     Args:
         a (cupy.ndarray): Array to sort.
+        axis (int or None): Axis along which to sort. Default is -1, which
+            means sort along the last axis. If None is supplied, the array is
+            flattened before sorting.
 
     Returns:
         cupy.ndarray: Array of indices that sort ``a``.
 
     .. note::
-       For its implementation reason, ``cupy.argsort`` currently supports only
-       arrays with their rank of one and does not support ``axis``, ``kind``
-       and ``order`` parameters that ``numpy.argsort`` supports.
+        For its implementation reason, ``cupy.argsort`` does not support
+        ``kind`` and ``order`` parameters.
 
     .. seealso:: :func:`numpy.argsort`
 
     """
-    return a.argsort()
+    return a.argsort(axis=axis)
 
 
 def msort(a):
@@ -105,27 +114,54 @@ def msort(a):
 
     .. note:
         ``cupy.msort(a)``, the CuPy counterpart of ``numpy.msort(a)``, is
-        equivalent to ``cupy.sort(a, axis=0)``. For its implementation reason,
-        ``cupy.sort`` currently supports only sorting an array with its rank of
-        one, so ``cupy.msort(a)`` is actually the same as ``cupy.sort(a)`` for
-        now.
+        equivalent to ``cupy.sort(a, axis=0)``.
 
     .. seealso:: :func:`numpy.msort`
 
     """
 
-    if a.ndim > 1:
-        raise ValueError('Sorting arrays with the rank of two or more is not '
-                         'Supported')
-
     # TODO(takagi): Support float16 and bool.
-    return sort(a)
+    return sort(a, axis=0)
 
 
 # TODO(okuta): Implement sort_complex
 
 
-# TODO(okuta): Implement partition
+def partition(a, kth, axis=-1):
+    """Returns a partially sorted copy of an array.
+
+    Creates a copy of the array whose elements are rearranged such that the
+    value of the element in k-th position would occur in that position in a
+    sorted array. All of the elements before the new k-th element are less
+    than or equal to the elements after the new k-th element.
+
+    Args:
+        a (cupy.ndarray): Array to be sorted.
+        kth (int or sequence of ints): Element index to partition by. If
+            supplied with a sequence of k-th it will partition all elements
+            indexed by k-th of them into their sorted position at once.
+        axis (int or None): Axis along which to sort. Default is -1, which
+            means sort along the last axis. If None is supplied, the array is
+            flattened before sorting.
+
+    Returns:
+        cupy.ndarray: Array of the same type and shape as ``a``.
+
+    .. note::
+       For its implementation reason, :func:`cupy.partition` fully sorts the
+       given array as :func:`cupy.sort` does. It also does not support
+       ``kind`` and ``order`` parameters that :func:`numpy.partition` supports.
+
+    .. seealso:: :func:`numpy.partition`
+
+    """
+    if axis is None:
+        ret = a.flatten()
+        axis = -1
+    else:
+        ret = a.copy()
+    ret.partition(kth, axis=axis)
+    return ret
 
 
 # TODO(okuta): Implement argpartition

@@ -19,19 +19,23 @@ set 1 to CUPY_PYTHON_350_FORCE environment variable."""
         sys.exit(1)
 
 
-setup_requires = []
+setup_requires = [
+    'fastrlock>=0.3',
+]
 install_requires = [
     'nose',
     'numpy>=1.9.0',
     'six>=1.9.0',
+    'fastrlock>=0.3',
 ]
 
 ext_modules = cupy_setup_build.get_ext_modules()
 build_ext = cupy_setup_build.custom_build_ext
+sdist = cupy_setup_build.sdist_with_cython
 
 setup(
     name='cupy',
-    version='2.0.0a1',
+    version='2.0.0b1',
     description='CuPy: NumPy-like API accelerated with CUDA',
     author='Seiya Tokui',
     author_email='tokui@preferred.jp',
@@ -58,7 +62,28 @@ setup(
               'cupy.testing'],
     package_data={
         'cupy': [
-            'core/carray.cuh',
+            'core/include/cupy/complex/arithmetic.h',
+            'core/include/cupy/complex/catrig.h',
+            'core/include/cupy/complex/catrigf.h',
+            'core/include/cupy/complex/ccosh.h',
+            'core/include/cupy/complex/ccoshf.h',
+            'core/include/cupy/complex/cexp.h',
+            'core/include/cupy/complex/cexpf.h',
+            'core/include/cupy/complex/clog.h',
+            'core/include/cupy/complex/clogf.h',
+            'core/include/cupy/complex/complex.h',
+            'core/include/cupy/complex/complex_inl.h',
+            'core/include/cupy/complex/cpow.h',
+            'core/include/cupy/complex/cproj.h',
+            'core/include/cupy/complex/csinh.h',
+            'core/include/cupy/complex/csinhf.h',
+            'core/include/cupy/complex/csqrt.h',
+            'core/include/cupy/complex/csqrtf.h',
+            'core/include/cupy/complex/ctanh.h',
+            'core/include/cupy/complex/ctanhf.h',
+            'core/include/cupy/complex/math_private.h',
+            'core/include/cupy/carray.cuh',
+            'core/include/cupy/complex.cuh',
             'cuda/cupy_thrust.cu',
         ],
     },
@@ -68,5 +93,6 @@ setup(
     tests_require=['mock',
                    'nose'],
     ext_modules=ext_modules,
-    cmdclass={'build_ext': build_ext},
+    cmdclass={'build_ext': build_ext,
+              'sdist': sdist},
 )

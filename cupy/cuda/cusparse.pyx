@@ -6,6 +6,7 @@ cdef extern from "cupy_cusparse.h":
     Status cusparseCreate(Handle *handle)
     Status cusparseCreateMatDescr(MatDescr descr)
     Status cusparseDestroy(Handle handle)
+    Status cusparseDestroyMatDescr(MatDescr descr)
     Status cusparseSetMatIndexBase(MatDescr descr, IndexBase base)
     Status cusparseSetMatType(MatDescr descr, MatrixType type)
     Status cusparseSetPointerMode(Handle handle, PointerMode mode)
@@ -110,6 +111,16 @@ cdef extern from "cupy_cusparse.h":
         Handle handle, const int *cooRowInd, int nnz, int m, int *csrRowPtr,
         IndexBase idxBase)
 
+    Status cusparseScsc2dense(
+        Handle handle, int m, int n, const MatDescr descrA,
+        const float *cscSortedValA, const int *cscSortedRowIndA,
+        const int *cscSortedColPtrA, float *A, int lda)
+
+    Status cusparseDcsc2dense(
+        Handle handle, int m, int n, const MatDescr descrA,
+        const double *cscSortedValA, const int *cscSortedRowIndA,
+        const int *cscSortedColPtrA, double *A, int lda)
+
     Status cusparseXcsr2coo(
         Handle handle, const int *csrRowPtr, int nnz, int m, int *cooRowInd,
         IndexBase idxBase)
@@ -133,6 +144,35 @@ cdef extern from "cupy_cusparse.h":
         Handle handle, int m, int n, const MatDescr descrA,
         const double *csrSortedValA, const int *csrSortedRowPtrA,
         const int *csrSortedColIndA, double *A, int lda)
+
+    Status cusparseSdense2csc(
+        Handle handle, int m, int n, const MatDescr descrA, const float *A,
+        int lda, const int *nnzPerCol, float *cscValA, int *cscRowIndA,
+        int *cscColPtrA)
+
+    Status cusparseDdense2csc(
+        Handle handle, int m, int n, const MatDescr descrA, const double *A,
+        int lda, const int *nnzPerCol, double *cscValA, int *cscRowIndA,
+        int *cscColPtrA)
+
+    Status cusparseSdense2csr(
+        Handle handle, int m, int n, const MatDescr descrA,
+        const float *A, int lda, const int *nnzPerRow, float *csrValA,
+        int *csrRowPtrA, int *csrColIndA)
+
+    Status cusparseDdense2csr(
+        Handle handle, int m, int n, const MatDescr descrA,
+        const double *A, int lda, const int *nnzPerRow, double *csrValA,
+        int *csrRowPtrA, int *csrColIndA)
+
+    Status cusparseSnnz(
+        Handle handle, Direction dirA, int m, int n, const MatDescr descrA,
+        const float *A, int lda, int *nnzPerRowColumn, int *nnzTotalDevHostPtr)
+
+    Status cusparseDnnz(
+        Handle handle, Direction dirA, int m, int n, const MatDescr descrA,
+        const double *A, int lda, int *nnzPerRowColumn,
+        int *nnzTotalDevHostPtr)
 
     Status cusparseCreateIdentityPermutation(
         Handle handle, int n, int *p)
@@ -199,19 +239,24 @@ cpdef size_t create() except *:
     return <size_t >handle
 
 
-cpdef createMatDescr():
+cpdef size_t createMatDescr():
     cdef MatDescr desc
     status = cusparseCreateMatDescr(& desc)
     check_status(status)
     return <size_t>desc
 
 
-cpdef destroy(size_t handle):
+cpdef void destroy(size_t handle):
     status = cusparseDestroy(<Handle >handle)
     check_status(status)
 
 
-cpdef setMatIndexBase(size_t descr, base):
+cpdef void destroyMatDescr(size_t descr):
+    status = cusparseDestroyMatDescr(<MatDescr>descr)
+    check_status(status)
+
+
+cpdef void setMatIndexBase(size_t descr, base):
     status = cusparseSetMatIndexBase(<MatDescr>descr, base)
     check_status(status)
 
@@ -439,6 +484,28 @@ cpdef xcoo2csr(
     check_status(status)
 
 
+cpdef scsc2dense(
+        size_t handle, int m, int n, size_t descrA,
+        size_t cscSortedValA, size_t cscSortedRowIndA,
+        size_t cscSortedColPtrA, size_t A, int lda):
+    status = cusparseScsc2dense(
+        <Handle>handle, m, n, <MatDescr>descrA,
+        <const float *>cscSortedValA, <const int *>cscSortedRowIndA,
+        <const int *>cscSortedColPtrA, <float *>A, lda)
+    check_status(status)
+
+
+cpdef dcsc2dense(
+        size_t handle, int m, int n, size_t descrA,
+        size_t cscSortedValA, size_t cscSortedRowIndA,
+        size_t cscSortedColPtrA, size_t A, int lda):
+    status = cusparseDcsc2dense(
+        <Handle>handle, m, n, <MatDescr>descrA,
+        <const double *>cscSortedValA, <const int *>cscSortedRowIndA,
+        <const int *>cscSortedColPtrA, <double *>A, lda)
+    check_status(status)
+
+
 cpdef xcsr2coo(
         size_t handle, size_t csrRowPtr, int nnz, int m, size_t cooRowInd,
         int idxBase):
@@ -491,6 +558,70 @@ cpdef dcsr2dense(
         <Handle>handle, m, n, <MatDescr>descrA,
         <const double *>csrSortedValA, <const int *>csrSortedRowPtrA,
         <const int *>csrSortedColIndA, <double *>A, lda)
+    check_status(status)
+
+
+cpdef sdense2csc(
+        size_t handle, int m, int n, size_t descrA, size_t A,
+        int lda, size_t nnzPerCol, size_t cscValA, size_t cscRowIndA,
+        size_t cscColPtrA):
+    status = cusparseSdense2csc(
+        <Handle>handle, m, n, <const MatDescr>descrA, <const float *>A,
+        lda, <const int *>nnzPerCol, <float *>cscValA, <int *>cscRowIndA,
+        <int *>cscColPtrA)
+    check_status(status)
+
+
+cpdef ddense2csc(
+        size_t handle, int m, int n, size_t descrA, size_t A,
+        int lda, size_t nnzPerCol, size_t cscValA, size_t cscRowIndA,
+        size_t cscColPtrA):
+    status = cusparseDdense2csc(
+        <Handle>handle, m, n, <const MatDescr>descrA, <const double *>A,
+        lda, <const int *>nnzPerCol, <double *>cscValA, <int *>cscRowIndA,
+        <int *>cscColPtrA)
+    check_status(status)
+
+
+cpdef sdense2csr(
+        size_t handle, int m, int n, size_t descrA,
+        size_t A, int lda, size_t nnzPerRow, size_t csrValA,
+        size_t csrRowPtrA, size_t csrColIndA):
+    status = cusparseSdense2csr(
+        <Handle>handle, m, n, <MatDescr>descrA,
+        <const float *>A, lda, <const int *>nnzPerRow, <float *>csrValA,
+        <int *>csrRowPtrA, <int *>csrColIndA)
+    check_status(status)
+
+
+cpdef ddense2csr(
+        size_t handle, int m, int n, size_t descrA,
+        size_t A, int lda, size_t nnzPerRow, size_t csrValA,
+        size_t csrRowPtrA, size_t csrColIndA):
+    status = cusparseDdense2csr(
+        <Handle>handle, m, n, <MatDescr>descrA,
+        <const double *>A, lda, <const int *>nnzPerRow, <double *>csrValA,
+        <int *>csrRowPtrA, <int *>csrColIndA)
+    check_status(status)
+
+
+cpdef snnz(
+        size_t handle, int dirA, int m, int n, size_t descrA,
+        size_t A, int lda, size_t nnzPerRowColumn, size_t nnzTotalDevHostPtr):
+    status = cusparseSnnz(
+        <Handle>handle, <Direction>dirA, m, n, <const MatDescr>descrA,
+        <const float *>A, lda, <int *>nnzPerRowColumn,
+        <int *>nnzTotalDevHostPtr)
+    check_status(status)
+
+
+cpdef dnnz(
+        size_t handle, int dirA, int m, int n, size_t descrA,
+        size_t A, int lda, size_t nnzPerRowColumn, size_t nnzTotalDevHostPtr):
+    status = cusparseDnnz(
+        <Handle>handle, <Direction>dirA, m, n, <const MatDescr>descrA,
+        <const double *>A, lda, <int *>nnzPerRowColumn,
+        <int *>nnzTotalDevHostPtr)
     check_status(status)
 
 

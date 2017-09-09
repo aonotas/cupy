@@ -53,7 +53,7 @@ class TestNorm(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes()
+    @testing.for_all_dtypes(no_complex=True)
     @testing.numpy_cupy_allclose(rtol=1e-3, atol=1e-4)
     def test_norm(self, xp, dtype):
         a = testing.shaped_arange(self.shape, xp, dtype)
@@ -79,7 +79,7 @@ class TestMatrixRank(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    @testing.for_all_dtypes(no_float16=True)
+    @testing.for_all_dtypes(no_float16=True, no_complex=True)
     @testing.numpy_cupy_array_equal()
     def test_matrix_rank(self, xp, dtype):
         a = xp.array(self.array, dtype=dtype)
@@ -90,6 +90,50 @@ class TestMatrixRank(unittest.TestCase):
             self.assertEqual(y.dtype, 'l')
             self.assertEqual(y.shape, ())
         return xp.array(y)
+
+
+@unittest.skipUnless(
+    cuda.cusolver_enabled, 'Only cusolver in CUDA 8.0 is supported')
+@testing.gpu
+class TestDet(unittest.TestCase):
+
+    _multiprocess_can_split_ = True
+
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_allclose(rtol=1e-3, atol=1e-4)
+    def test_det(self, xp, dtype):
+        a = testing.shaped_arange((2, 2), xp, dtype) + 1
+        return xp.linalg.det(a)
+
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_allclose(rtol=1e-3, atol=1e-4)
+    def test_det_3(self, xp, dtype):
+        a = testing.shaped_arange((2, 2, 2), xp, dtype) + 1
+        return xp.linalg.det(a)
+
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_allclose(rtol=1e-3, atol=1e-4)
+    def test_det_4(self, xp, dtype):
+        a = testing.shaped_arange((2, 2, 2, 2), xp, dtype) + 1
+        return xp.linalg.det(a)
+
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_raises(accept_error=numpy.linalg.LinAlgError)
+    def test_det_different_last_two_dims(self, xp, dtype):
+        a = testing.shaped_arange((2, 3, 2), xp, dtype)
+        return xp.linalg.det(a)
+
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_raises(accept_error=numpy.linalg.LinAlgError)
+    def test_det_one_dim(self, xp, dtype):
+        a = testing.shaped_arange((2,), xp, dtype)
+        xp.linalg.det(a)
+
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_raises(accept_error=numpy.linalg.LinAlgError)
+    def test_det_zero_dim(self, xp, dtype):
+        a = testing.shaped_arange((), xp, dtype)
+        xp.linalg.det(a)
 
 
 @unittest.skipUnless(
@@ -127,7 +171,8 @@ class TestSlogdet(unittest.TestCase):
         sign, logdet = xp.linalg.slogdet(a)
         return xp.array([sign, logdet], dtype)
 
-    @testing.numpy_cupy_raises(numpy.linalg.LinAlgError)
+    @testing.for_float_dtypes(no_float16=True)
+    @testing.numpy_cupy_raises(accept_error=numpy.linalg.LinAlgError)
     def test_slogdet_one_dim(self, xp, dtype):
         a = testing.shaped_arange((2,), xp, dtype)
         xp.linalg.slogdet(a)

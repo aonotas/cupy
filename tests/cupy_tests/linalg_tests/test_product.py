@@ -87,7 +87,7 @@ class TestDotFor0Dim(unittest.TestCase):
     _multiprocess_can_split_ = True
 
     @testing.for_all_dtypes_combination(['dtype_a', 'dtype_b'])
-    @testing.numpy_cupy_allclose()
+    @testing.numpy_cupy_allclose(contiguous_check=False)
     def test_dot(self, xp, dtype_a, dtype_b):
         shape_a, shape_b = self.shape
         if self.trans_a:
@@ -145,10 +145,10 @@ class TestProduct(unittest.TestCase):
 
     @testing.for_all_dtypes()
     @testing.numpy_cupy_raises()
-    def test_transposed_dot_with_out2(self, xp, dtype):
+    def test_transposed_dot_with_out_f_contiguous(self, xp, dtype):
         a = testing.shaped_arange((2, 3, 4), xp, dtype).transpose(1, 0, 2)
         b = testing.shaped_arange((4, 2, 3), xp, dtype).transpose(2, 0, 1)
-        c = xp.ndarray((3, 2, 3, 2)[::-1], dtype=dtype).T
+        c = xp.ndarray((3, 2, 3, 2), dtype=dtype, order='F')
         # Only C-contiguous array is acceptable
         xp.dot(a, b, out=c)
 
@@ -323,3 +323,31 @@ class TestProduct(unittest.TestCase):
         a = xp.array(2, dtype=dtype)
         b = testing.shaped_arange((3, 4, 2), xp, dtype)
         return xp.tensordot(a, b, axes=0)
+
+    @testing.for_all_dtypes()
+    @testing.numpy_cupy_allclose()
+    def test_kron(self, xp, dtype):
+        a = testing.shaped_arange((4,), xp, dtype)
+        b = testing.shaped_arange((5,), xp, dtype)
+        return xp.kron(a, b)
+
+    @testing.for_all_dtypes()
+    @testing.numpy_cupy_allclose()
+    def test_reversed_kron(self, xp, dtype):
+        a = testing.shaped_arange((4,), xp, dtype)
+        b = testing.shaped_arange((5,), xp, dtype)
+        return xp.kron(a[::-1], b[::-1])
+
+    @testing.for_all_dtypes()
+    @testing.numpy_cupy_allclose()
+    def test_multidim_kron(self, xp, dtype):
+        a = testing.shaped_arange((2, 3, 4), xp, dtype)
+        b = testing.shaped_arange((4, 2, 3), xp, dtype)
+        return xp.kron(a, b)
+
+    @testing.for_all_dtypes()
+    @testing.numpy_cupy_allclose()
+    def test_zerodim_kron(self, xp, dtype):
+        a = xp.array(2, dtype=dtype)
+        b = testing.shaped_arange((4, 5), xp, dtype)
+        return xp.kron(a, b)

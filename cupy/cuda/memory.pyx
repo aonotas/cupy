@@ -6,15 +6,24 @@ import gc
 import warnings
 import weakref
 
-import six
+from fastrlock cimport rlock
 
+from cupy.cuda import memory_hook
 from cupy.cuda import runtime
 
 from cupy.cuda cimport device
 from cupy.cuda cimport runtime
 
 
-cdef class Memory:
+class OutOfMemoryError(MemoryError):
+
+    def __init__(self, size, total):
+        msg = 'out of memory to allocate %d bytes ' \
+              '(total %d bytes)' % (size, total)
+        super(OutOfMemoryError, self).__init__(msg)
+
+
+class Memory(object):
 
     """Memory allocation on a CUDA device.
 
@@ -34,13 +43,54 @@ cdef class Memory:
             self.device = device.Device()
             self.ptr = runtime.malloc(size)
 
-    def __dealloc__(self):
+    def __del__(self):
         if self.ptr:
             runtime.free(self.ptr)
 
     def __int__(self):
         """Returns the pointer value to the head of the allocation."""
         return self.ptr
+
+
+class ManagedMemory(Memory):
+
+    """Managed memory (Unified memory) allocation on a CUDA device.
+
+    This class provides an RAII interface of the CUDA managed memory
+    allocation.
+
+    Args:
+        device (cupy.cuda.Device): Device whose memory the pointer refers to.
+        size (int): Size of the memory allocation in bytes.
+
+    """
+
+    def __init__(self, Py_ssize_t size):
+        self.size = size
+        self.device = None
+        self.ptr = 0
+        if size > 0:
+            self.device = device.Device()
+            self.ptr = runtime.mallocManaged(size)
+
+    def prefetch(self, stream):
+        """(experimental) Prefetch memory.
+
+        Args:
+            stream (cupy.cuda.Stream): CUDA stream.
+        """
+        runtime.memPrefetchAsync(self.ptr, self.size, self.device.id,
+                                 stream.ptr)
+
+    def advise(self, int advise, device.Device device):
+        """(experimental) Advise about the usage of this memory.
+
+        Args:
+            advics (int): Advise to be applied for this memory.
+            device (cupy.cuda.Device): Device to apply the advice for.
+
+        """
+        runtime.memAdvise(self.ptr, self.size, advise, device.id)
 
 
 cdef set _peer_access_checked = set()
@@ -63,6 +113,38 @@ cpdef _set_peer_access(int device, int peer):
     finally:
         runtime.setDevice(current)
 
+cdef class Chunk:
+
+    """A chunk points to a device memory.
+
+    A chunk might be a splitted memory block from a larger allocation.
+    The prev/next pointers contruct a doubly-linked list of memory addresses
+    sorted by base address that must be contiguous.
+
+    Args:
+        mem (Memory): The device memory buffer.
+        offset (int): An offset bytes from the head of the buffer.
+        size (int): Chunk size in bytes.
+
+    Attributes:
+        device (cupy.cuda.Device): Device whose memory the pointer refers to.
+        mem (Memory): The device memory buffer.
+        ptr (int): Memory address.
+        offset (int): An offset bytes from the head of the buffer.
+        size (int): Chunk size in bytes.
+        prev (Chunk): prev memory pointer if split from a larger allocation
+        next (Chunk): next memory pointer if split from a larger allocation
+    """
+
+    def __init__(self, mem, Py_ssize_t offset, Py_ssize_t size):
+        assert mem.ptr > 0 or offset == 0
+        self.mem = mem
+        self.device = mem.device
+        self.ptr = mem.ptr + offset
+        self.offset = offset
+        self.size = size
+        self.prev = None
+        self.next = None
 
 cdef class MemoryPointer:
 
@@ -265,6 +347,31 @@ cpdef MemoryPointer _malloc(Py_ssize_t size):
     return MemoryPointer(mem, 0)
 
 
+cpdef MemoryPointer malloc_managed(Py_ssize_t size):
+    """Allocate managed memory (unified memory).
+
+    This method can be used as a CuPy memory allocator. The simplest way to
+    use a managed memory as the default allocator is the following code::
+
+        set_allocator(malloc_managed)
+
+    The advantage using managed memory in CuPy is that device memory
+    oversubscription is possible for GPUs that have a non-zero value for the
+    device attribute cudaDevAttrConcurrentManagedAccess.
+    CUDA >= 8.0 with GPUs later than or equal to Pascal is preferrable.
+
+    Read more at: http://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#axzz4qygc1Ry1  # NOQA
+
+    Args:
+        size (int): Size of the memory allocation in bytes.
+
+    Returns:
+        ~cupy.cuda.MemoryPointer: Pointer to the allocated buffer.
+    """
+    mem = ManagedMemory(size)
+    return MemoryPointer(mem, 0)
+
+
 cdef object _current_allocator = _malloc
 
 
@@ -297,7 +404,7 @@ cpdef set_allocator(allocator=_malloc):
     _current_allocator = allocator
 
 
-cdef class PooledMemory(Memory):
+class PooledMemory(Memory):
 
     """Memory allocation for a memory pool.
 
@@ -306,17 +413,17 @@ cdef class PooledMemory(Memory):
 
     """
 
-    def __init__(self, Memory mem, pool):
-        self.ptr = mem.ptr
-        self.size = mem.size
-        self.device = mem.device
+    def __init__(self, Chunk chunk, pool):
+        self.device = chunk.device
+        self.ptr = chunk.ptr
+        self.size = chunk.size
         self.pool = pool
 
-    def __dealloc__(self):
+    def __del__(self):
         if self.ptr != 0:
             self.free()
 
-    cpdef free(self):
+    def free(self):
         """Frees the memory buffer and returns it to the memory pool.
 
         This function actually does not free the buffer. It just returns the
@@ -325,39 +432,185 @@ cdef class PooledMemory(Memory):
         """
         pool = self.pool()
         if pool and self.ptr != 0:
-            pool.free(self.ptr, self.size)
+            hooks = memory_hook.get_memory_hooks()
+            if hooks:
+                device_id = self.device.id
+                pmem_id = id(self)
+                size = self.size
+                ptr = self.ptr
+                hooks_values = hooks.values()  # avoid six for performance
+                for hook in hooks_values:
+                    hook.free_preprocess(device_id=device_id,
+                                         mem_size=size,
+                                         mem_ptr=ptr,
+                                         pmem_id=pmem_id)
+                try:
+                    pool.free(ptr, size)
+                finally:
+                    for hook in hooks_values:
+                        hook.free_postprocess(device_id=device_id,
+                                              mem_size=size,
+                                              mem_ptr=ptr,
+                                              pmem_id=pmem_id)
+            else:
+                pool.free(self.ptr, self.size)
         self.ptr = 0
         self.size = 0
         self.device = None
 
 
 cdef class SingleDeviceMemoryPool:
+    """Memory pool implementation for single device.
 
-    """Memory pool implementation for single device."""
+    - The allocator attempts to find the smallest cached block that will fit
+      the requested size. If the block is larger than the requested size,
+      it may be split. If no block is found, the allocator will delegate to
+      cudaMalloc.
+    - If the cudaMalloc fails, the allocator will free all cached blocks that
+      are not split and retry the allocation.
+    """
 
     def __init__(self, allocator=_malloc):
-        self._in_use = {}
-        self._free = collections.defaultdict(list)
-        self._alloc = allocator
-        self._weakref = weakref.ref(self)
         # cudaMalloc() is aligned to at least 512 bytes
         # cf. https://gist.github.com/sonots/41daaa6432b1c8b27ef782cd14064269
         self._allocation_unit_size = 512
+        self._initial_bins_size = 1024
+        self._in_use = {}
+        self._free = [set() for i in range(self._initial_bins_size)]
+        self._allocator = allocator
+        self._weakref = weakref.ref(self)
+        self._device_id = device.get_device_id()
+        self._free_lock = rlock.create_fastrlock()
+        self._in_use_lock = rlock.create_fastrlock()
+
+    cpdef Py_ssize_t _round_size(self, Py_ssize_t size):
+        """Round up the memory size to fit memory alignment of cudaMalloc."""
+        unit = self._allocation_unit_size
+        return (((size + unit - 1) // unit) * unit)
+
+    cpdef Py_ssize_t _bin_index_from_size(self, Py_ssize_t size):
+        """Get appropriate bins (_free) index from the memory size"""
+        unit = self._allocation_unit_size
+        return (size - 1) // unit
+
+    cpdef void _grow_free_if_necessary(self, Py_ssize_t size):
+        """Extend bins (_free) size if necessary"""
+        current_size = len(self._free)
+        if current_size >= size:
+            return
+        growth_size = size - current_size
+        growth = [set() for i in range(growth_size)]
+        self._free.extend(growth)
+
+    cpdef tuple _split(self, Chunk chunk, Py_ssize_t size):
+        """Split contiguous block of a larger allocation"""
+        assert chunk.size >= size
+        if chunk.size == size:
+            return (chunk, None)
+        cdef Chunk head
+        cdef Chunk remaining
+        head = Chunk(chunk.mem, chunk.offset, size)
+        remaining = Chunk(chunk.mem, chunk.offset + size, chunk.size - size)
+        if chunk.prev is not None:
+            head.prev = chunk.prev
+            chunk.prev.next = head
+        if chunk.next is not None:
+            remaining.next = chunk.next
+            chunk.next.prev = remaining
+        head.next = remaining
+        remaining.prev = head
+        return (head, remaining)
+
+    cpdef Chunk _merge(self, Chunk head, Chunk remaining):
+        """Merge previously splitted block (chunk)"""
+        cdef Chunk merged
+        size = head.size + remaining.size
+        merged = Chunk(head.mem, head.offset, size)
+        if head.prev is not None:
+            merged.prev = head.prev
+            merged.prev.next = merged
+        if remaining.next is not None:
+            merged.next = remaining.next
+            merged.next.prev = merged
+        return merged
+
+    cpdef MemoryPointer _alloc(self, Py_ssize_t rounded_size):
+        hooks = memory_hook.get_memory_hooks()
+        if hooks:
+            memptr = None
+            device_id = self._device_id
+            hooks_values = hooks.values()  # avoid six for performance
+            for hook in hooks_values:
+                hook.alloc_preprocess(device_id=device_id,
+                                      mem_size=rounded_size)
+            try:
+                memptr = self._allocator(rounded_size)
+            finally:
+                for hook in hooks_values:
+                    mem_ptr = memptr.ptr if memptr is not None else 0
+                    hook.alloc_postprocess(device_id=device_id,
+                                           mem_size=rounded_size,
+                                           mem_ptr=mem_ptr)
+            return memptr
+        else:
+            return self._allocator(rounded_size)
 
     cpdef MemoryPointer malloc(self, Py_ssize_t size):
-        cdef list free
-        cdef Memory mem
+        rounded_size = self._round_size(size)
+        hooks = memory_hook.get_memory_hooks()
+        if hooks:
+            memptr = None
+            device_id = self._device_id
+            hooks_values = hooks.values()  # avoid six for performance
+            for hook in hooks_values:
+                hook.malloc_preprocess(device_id=device_id,
+                                       size=size,
+                                       mem_size=rounded_size)
+            try:
+                memptr = self._malloc(rounded_size)
+            finally:
+                if memptr is None:
+                    mem_ptr = 0
+                    pmem_id = 0
+                else:
+                    mem_ptr = memptr.ptr
+                    pmem_id = id(memptr.mem)
+                for hook in hooks_values:
+                    hook.malloc_postprocess(device_id=device_id,
+                                            size=size,
+                                            mem_size=rounded_size,
+                                            mem_ptr=mem_ptr,
+                                            pmem_id=pmem_id)
+            return memptr
+        else:
+            return self._malloc(rounded_size)
+
+    cpdef MemoryPointer _malloc(self, Py_ssize_t size):
+        cdef set free_list = None
+        cdef Chunk chunk = None
+        cdef Chunk remaining = None
 
         if size == 0:
             return MemoryPointer(Memory(0), 0)
 
-        # Round up the memory size to fit memory alignment of cudaMalloc
-        unit = self._allocation_unit_size
-        size = (((size + unit - 1) // unit) * unit)
-        free = self._free[size]
-        if free:
-            mem = free.pop()
+        index = self._bin_index_from_size(size)
+        # find best-fit, or a smallest larger allocation
+        length = len(self._free)
+        for i in range(index, length):
+            if self._free[i]:
+                try:
+                    rlock.lock_fastrlock(self._free_lock, -1, True)
+                    free_list = self._free[i]
+                    if free_list:
+                        chunk = free_list.pop()
+                        break
+                finally:
+                    rlock.unlock_fastrlock(self._free_lock)
+
+        if chunk:
+            chunk, remaining = self._split(chunk, size)
         else:
+            # cudaMalloc if a cache is not found
             try:
                 mem = self._alloc(size).mem
             except runtime.CUDARuntimeError as e:
@@ -370,23 +623,89 @@ cdef class SingleDeviceMemoryPool:
                     if e.status != runtime.errorMemoryAllocation:
                         raise
                     gc.collect()
-                    mem = self._alloc(size).mem
+                    try:
+                        mem = self._alloc(size).mem
+                    except runtime.CUDARuntimeError as e:
+                        if e.status != runtime.errorMemoryAllocation:
+                            raise
+                        else:
+                            total = size + self.total_bytes()
+                            raise OutOfMemoryError(size, total)
+            chunk = Chunk(mem, 0, size)
 
-        self._in_use[mem.ptr] = mem
-        pmem = PooledMemory(mem, self._weakref)
+        try:
+            rlock.lock_fastrlock(self._in_use_lock, -1, True)
+            self._in_use[chunk.ptr] = chunk
+        finally:
+            rlock.unlock_fastrlock(self._in_use_lock)
+        if remaining:
+            remaining_index = self._bin_index_from_size(remaining.size)
+            try:
+                rlock.lock_fastrlock(self._free_lock, -1, True)
+                self._free[remaining_index].add(remaining)
+            finally:
+                rlock.unlock_fastrlock(self._free_lock)
+        pmem = PooledMemory(chunk, self._weakref)
         return MemoryPointer(pmem, 0)
 
     cpdef free(self, size_t ptr, Py_ssize_t size):
-        cdef list free
-        cdef Memory mem
-        mem = self._in_use.pop(ptr, None)
-        if mem is None:
+        cdef Chunk chunk
+        cdef int index
+
+        try:
+            rlock.lock_fastrlock(self._in_use_lock, -1, True)
+            chunk = self._in_use.pop(ptr, None)
+        finally:
+            rlock.unlock_fastrlock(self._in_use_lock)
+        if chunk is None:
             raise RuntimeError('Cannot free out-of-pool memory')
-        free = self._free[size]
-        free.append(mem)
+
+        if chunk.next:
+            chunk_next = None
+            index = self._bin_index_from_size(chunk.next.size)
+            try:
+                rlock.lock_fastrlock(self._free_lock, -1, True)
+                if chunk.next in self._free[index]:
+                    self._free[index].remove(chunk.next)
+                    chunk_next = chunk.next
+            finally:
+                rlock.unlock_fastrlock(self._free_lock)
+            if chunk_next:
+                chunk = self._merge(chunk, chunk_next)
+
+        if chunk.prev:
+            chunk_prev = None
+            index = self._bin_index_from_size(chunk.prev.size)
+            try:
+                rlock.lock_fastrlock(self._free_lock, -1, True)
+                if chunk.prev in self._free[index]:
+                    self._free[index].remove(chunk.prev)
+                    chunk_prev = chunk.prev
+            finally:
+                rlock.unlock_fastrlock(self._free_lock)
+            if chunk_prev:
+                chunk = self._merge(chunk_prev, chunk)
+
+        index = self._bin_index_from_size(chunk.size)
+        self._grow_free_if_necessary(index + 1)
+        try:
+            rlock.lock_fastrlock(self._free_lock, -1, True)
+            self._free[index].add(chunk)
+        finally:
+            rlock.unlock_fastrlock(self._free_lock)
 
     cpdef free_all_blocks(self):
-        self._free.clear()
+        # Free all **non-split** chunks
+        try:
+            rlock.lock_fastrlock(self._free_lock, -1, True)
+            for i in range(len(self._free)):
+                keep_list = set()
+                for chunk in self._free[i]:
+                    if chunk.prev or chunk.next:
+                        keep_list.add(chunk)
+                self._free[i] = keep_list
+        finally:
+            rlock.unlock_fastrlock(self._free_lock)
 
     cpdef free_all_free(self):
         warnings.warn(
@@ -396,21 +715,33 @@ cdef class SingleDeviceMemoryPool:
 
     cpdef n_free_blocks(self):
         cdef Py_ssize_t n = 0
-        for v in six.itervalues(self._free):
-            n += len(v)
+        try:
+            rlock.lock_fastrlock(self._free_lock, -1, True)
+            for v in self._free:
+                n += len(v)
+        finally:
+            rlock.unlock_fastrlock(self._free_lock)
         return n
 
     cpdef used_bytes(self):
         cdef Py_ssize_t size = 0
-        for mem in six.itervalues(self._in_use):
-            size += mem.size
+        try:
+            rlock.lock_fastrlock(self._in_use_lock, -1, True)
+            for chunk in self._in_use.itervalues():
+                size += chunk.size
+        finally:
+            rlock.unlock_fastrlock(self._in_use_lock)
         return size
 
     cpdef free_bytes(self):
         cdef Py_ssize_t size = 0
-        for free_list in six.itervalues(self._free):
-            for mem in free_list:
-                size += mem.size
+        try:
+            rlock.lock_fastrlock(self._free_lock, -1, True)
+            for free_list in self._free:
+                for chunk in free_list:
+                    size += chunk.size
+        finally:
+            rlock.unlock_fastrlock(self._free_lock)
         return size
 
     cpdef total_bytes(self):
@@ -455,7 +786,12 @@ cdef class MemoryPool(object):
         This method can be used as a CuPy memory allocator. The simplest way to
         use a memory pool as the default allocator is the following code::
 
-           set_allocator(MemoryPool().malloc)
+            set_allocator(MemoryPool().malloc)
+
+        Also, the way to use a memory pool of Managed memory (Unified memory)
+        as the default allocator is the following code::
+
+            set_allocator(MemoryPool(malloc_managed).malloc)
 
         Args:
             size (int): Size of the memory buffer to allocate in bytes.

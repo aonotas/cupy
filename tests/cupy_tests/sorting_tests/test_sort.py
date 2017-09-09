@@ -36,16 +36,14 @@ class TestSort(unittest.TestCase):
 
     # Test dtypes
 
-    @testing.for_dtypes(['b', 'h', 'i', 'l', 'q', 'B', 'H', 'I', 'L', 'Q',
-                         numpy.float32, numpy.float64])
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
     @testing.numpy_cupy_allclose()
     def test_sort_dtype(self, xp, dtype):
         a = testing.shaped_random((10,), xp, dtype)
         a.sort()
         return a
 
-    @testing.for_dtypes(['b', 'h', 'i', 'l', 'q', 'B', 'H', 'I', 'L', 'Q',
-                         numpy.float32, numpy.float64])
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
     @testing.numpy_cupy_allclose()
     def test_external_sort_dtype(self, xp, dtype):
         a = testing.shaped_random((10,), xp, dtype)
@@ -86,6 +84,79 @@ class TestSort(unittest.TestCase):
         a = testing.shaped_random((10,), xp)[::2]  # Non contiguous view
         return xp.sort(a)
 
+    # Test axis
+
+    @testing.numpy_cupy_array_equal()
+    def test_sort_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        a.sort(axis=0)
+        return a
+
+    @testing.numpy_cupy_array_equal()
+    def test_external_sort_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return xp.sort(a, axis=0)
+
+    @testing.numpy_cupy_array_equal()
+    def test_sort_negative_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        a.sort(axis=-2)
+        return a
+
+    @testing.numpy_cupy_array_equal()
+    def test_external_sort_negative_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return xp.sort(a, axis=-2)
+
+    @testing.numpy_cupy_array_equal()
+    def test_external_sort_none_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return xp.sort(a, axis=None)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_sort_invalid_axis1(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        a.sort(axis=3)
+
+    def test_sort_invalid_axis2(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            a.sort(axis=3)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_external_sort_invalid_axis1(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        xp.sort(a, axis=3)
+
+    def test_external_sort_invalid_axis2(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            cupy.sort(a, axis=3)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_sort_invalid_negative_axis1(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        a.sort(axis=-4)
+
+    def test_sort_invalid_negative_axis2(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            a.sort(axis=-4)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_external_sort_invalid_negative_axis1(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        xp.sort(a, axis=-4)
+
+    def test_external_sort_invalid_negative_axis2(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            cupy.sort(a, axis=-4)
+
 
 @testing.gpu
 class TestLexsort(unittest.TestCase):
@@ -117,8 +188,7 @@ class TestLexsort(unittest.TestCase):
 
     # Test dtypes
 
-    @testing.for_dtypes(['b', 'h', 'i', 'l', 'q', 'B', 'H', 'I', 'L',
-                         numpy.float32, numpy.float64])
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
     @testing.numpy_cupy_allclose()
     def test_lexsort_dtype(self, xp, dtype):
         a = testing.shaped_random((2, 10), xp, dtype)
@@ -131,65 +201,105 @@ class TestLexsort(unittest.TestCase):
             return cupy.lexsort(a)
 
 
+@testing.parameterize(*testing.product({
+    'external': [False, True],
+}))
 @testing.gpu
 class TestArgsort(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    # Test ranks
+    def argsort(self, a, axis=-1):
+        if self.external:
+            xp = cupy.get_array_module(a)
+            return xp.argsort(a, axis=axis)
+        else:
+            return a.argsort(axis=axis)
 
+    # Test base cases
+
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
     @testing.numpy_cupy_raises()
-    def test_argsort_zero_dim(self, xp):
-        a = testing.shaped_random((), xp)
-        return a.argsort()
+    def test_argsort_zero_dim(self, xp, dtype):
+        a = testing.shaped_random((), xp, dtype)
+        return self.argsort(a)
 
-    @testing.numpy_cupy_raises()
-    def test_external_argsort_zero_dim(self, xp):
-        a = testing.shaped_random((), xp)
-        return xp.argsort(a)
-
-    def test_argsort_two_or_more_dim(self):
-        a = testing.shaped_random((2, 3), cupy)
-        with self.assertRaises(ValueError):
-            return a.argsort()
-
-    def test_external_argsort_two_or_more_dim(self):
-        a = testing.shaped_random((2, 3), cupy)
-        with self.assertRaises(ValueError):
-            return cupy.argsort(a)
-
-    # Test dtypes
-
-    @testing.for_dtypes(['b', 'h', 'i', 'l', 'q', 'B', 'H', 'I', 'L', 'Q',
-                         numpy.float32, numpy.float64])
-    @testing.numpy_cupy_allclose()
-    def test_argsort_dtype(self, xp, dtype):
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
+    @testing.numpy_cupy_array_equal()
+    def test_argsort_one_dim(self, xp, dtype):
         a = testing.shaped_random((10,), xp, dtype)
-        return a.argsort()
+        return self.argsort(a)
 
-    @testing.for_dtypes(['b', 'h', 'i', 'l', 'q', 'B', 'H', 'I', 'L', 'Q',
-                         numpy.float32, numpy.float64])
-    @testing.numpy_cupy_allclose()
-    def test_external_argsort_dtype(self, xp, dtype):
-        a = testing.shaped_random((10,), xp, dtype)
-        return xp.argsort(a)
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
+    @testing.numpy_cupy_array_equal()
+    def test_argsort_multi_dim(self, xp, dtype):
+        a = testing.shaped_random((2, 3, 3), xp, dtype)
+        return self.argsort(a)
 
-    @testing.for_dtypes([numpy.float16, numpy.bool_])
+    @testing.numpy_cupy_array_equal()
+    def test_argsort_non_contiguous(self, xp):
+        a = xp.array([1, 0, 2, 3])[::2]
+        return self.argsort(a)
+
+    # Test unsupported dtype
+
+    @testing.for_dtypes([numpy.float16, numpy.bool_, numpy.complex64])
     def test_argsort_unsupported_dtype(self, dtype):
         a = testing.shaped_random((10,), cupy, dtype)
-        with self.assertRaises(TypeError):
-            return a.argsort()
+        with self.assertRaises(NotImplementedError):
+            return self.argsort(a)
 
-    @testing.for_dtypes([numpy.float16, numpy.bool_])
-    def test_external_argsort_unsupported_dtype(self, dtype):
-        a = testing.shaped_random((10,), cupy, dtype)
-        with self.assertRaises(TypeError):
-            return cupy.argsort(a)
+    # Test axis
 
-    def test_argsort_keep_original_array(self):
+    @testing.numpy_cupy_array_equal()
+    def test_argsort_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return self.argsort(a, axis=0)
+
+    @testing.numpy_cupy_array_equal()
+    def test_argsort_negative_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return self.argsort(a, axis=2)
+
+    @testing.numpy_cupy_array_equal()
+    def test_argsort_none_axis(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return self.argsort(a, axis=None)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_argsort_invalid_axis1(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return self.argsort(a, axis=3)
+
+    def test_argsort_invalid_axis2(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            return self.argsort(a, axis=3)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_argsort_invalid_negative_axis1(self, xp):
+        a = testing.shaped_random((2, 3, 3), xp)
+        return self.argsort(a, axis=-4)
+
+    def test_argsort_invalid_negative_axis2(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            return self.argsort(a, axis=-4)
+
+    # Misc tests
+
+    def test_argsort_original_array_not_modified_one_dim(self):
         a = testing.shaped_random((10,), cupy)
         b = cupy.array(a)
-        a.argsort()
+        self.argsort(a)
+        testing.assert_allclose(a, b)
+
+    def test_argsort_original_array_not_modified_multi_dim(self):
+        a = testing.shaped_random((2, 3, 3), cupy)
+        b = cupy.array(a)
+        self.argsort(a)
         testing.assert_allclose(a, b)
 
 
@@ -198,29 +308,184 @@ class TestMsort(unittest.TestCase):
 
     _multiprocess_can_split_ = True
 
-    # Test ranks
+    # Test base cases
 
     @testing.numpy_cupy_raises()
     def test_msort_zero_dim(self, xp):
         a = testing.shaped_random((), xp)
         return xp.msort(a)
 
-    def test_msort_two_or_more_dim(self):
-        a = testing.shaped_random((2, 3), cupy)
-        with self.assertRaises(ValueError):
-            return cupy.msort(a)
-
-    # Test dtypes
-
-    @testing.for_dtypes(['b', 'h', 'i', 'l', 'q', 'B', 'H', 'I', 'L', 'Q',
-                         numpy.float32, numpy.float64])
-    @testing.numpy_cupy_allclose()
-    def test_msort_dtype(self, xp, dtype):
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
+    @testing.numpy_cupy_array_equal()
+    def test_msort_one_dim(self, xp, dtype):
         a = testing.shaped_random((10,), xp, dtype)
         return xp.msort(a)
 
-    @testing.for_dtypes([numpy.float16, numpy.bool_])
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
+    @testing.numpy_cupy_array_equal()
+    def test_msort_multi_dim(self, xp, dtype):
+        a = testing.shaped_random((2, 3), xp, dtype)
+        return xp.msort(a)
+
+    # Test unsupported dtype
+
+    @testing.for_dtypes([numpy.float16, numpy.bool_, numpy.complex64])
     def test_msort_unsupported_dtype(self, dtype):
         a = testing.shaped_random((10,), cupy, dtype)
         with self.assertRaises(NotImplementedError):
             return cupy.msort(a)
+
+
+@testing.parameterize(*testing.product({
+    'external': [False, True],
+}))
+@testing.gpu
+class TestPartition(unittest.TestCase):
+
+    _multiprocess_can_split_ = True
+
+    def partition(self, a, kth, axis=-1):
+        if self.external:
+            xp = cupy.get_array_module(a)
+            return xp.partition(a, kth, axis=axis)
+        else:
+            a.partition(kth, axis=axis)
+            return a
+
+    # Test base cases
+
+    @testing.numpy_cupy_raises()
+    def test_partition_zero_dim(self, xp):
+        a = testing.shaped_random((), xp)
+        kth = 2
+        return self.partition(a, kth)
+
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
+    @testing.numpy_cupy_equal()
+    def test_partition_one_dim(self, xp, dtype):
+        a = testing.shaped_random((10,), xp, dtype)
+        kth = 2
+        x = self.partition(a, kth)
+        self.assertTrue(xp.all(x[0:kth] <= x[kth:kth + 1]))
+        self.assertTrue(xp.all(x[kth:kth + 1] <= x[kth + 1:]))
+        return x[kth]
+
+    @testing.for_all_dtypes(no_float16=True, no_bool=True, no_complex=True)
+    @testing.numpy_cupy_array_equal()
+    def test_partition_multi_dim(self, xp, dtype):
+        a = testing.shaped_random((10, 10, 10), xp, dtype)
+        kth = 2
+        x = self.partition(a, kth)
+        self.assertTrue(xp.all(x[:, :, 0:kth] <= x[:, :, kth:kth + 1]))
+        self.assertTrue(xp.all(x[:, :, kth:kth + 1] <= x[:, :, kth + 1:]))
+        return x[:, :, kth:kth + 1]
+
+    # Test unsupported dtype
+
+    @testing.for_dtypes([numpy.float16, numpy.bool_])
+    def test_partition_unsupported_dtype(self, dtype):
+        a = testing.shaped_random((10,), cupy, dtype)
+        kth = 2
+        with self.assertRaises(NotImplementedError):
+            return self.partition(a, kth)
+
+    # Test non-contiguous array
+
+    @testing.numpy_cupy_array_equal()
+    def test_partition_non_contiguous(self, xp):
+        a = testing.shaped_random((10,), xp)[::2]
+        kth = 2
+        if not self.external:
+            if xp is cupy:
+                with self.assertRaises(NotImplementedError):
+                    return self.partition(a, kth)
+            return xp.array([])  # dummy
+        else:
+            return self.partition(a, kth)
+
+    # Test kth
+
+    @testing.numpy_cupy_equal()
+    def test_partition_sequence_kth(self, xp):
+        a = testing.shaped_random((10,), xp)
+        kth = (2, 4)
+        x = self.partition(a, kth)
+        return x[kth[0]], x[kth[1]]
+
+    @testing.numpy_cupy_equal()
+    def test_partition_negative_kth(self, xp):
+        a = testing.shaped_random((10,), xp)
+        kth = -3
+        x = self.partition(a, kth)
+        return x[kth]
+
+    @testing.numpy_cupy_raises()
+    def test_partition_invalid_kth(self, xp):
+        a = testing.shaped_random((10,), xp)
+        kth = 10
+        return self.partition(a, kth)
+
+    @testing.numpy_cupy_raises()
+    def test_partition_invalid_negative_kth(self, xp):
+        a = testing.shaped_random((10,), xp)
+        kth = -11
+        return self.partition(a, kth)
+
+    # Test axis
+
+    @testing.numpy_cupy_array_equal()
+    def test_partition_axis(self, xp):
+        a = testing.shaped_random((10, 10, 10), xp)
+        kth = 2
+        axis = 0
+        x = self.partition(a, kth, axis=axis)
+        return x[kth, :, :]
+
+    @testing.numpy_cupy_array_equal()
+    def test_partition_negative_axis(self, xp):
+        a = testing.shaped_random((10, 10, 10), xp)
+        kth = 2
+        axis = -1
+        x = self.partition(a, kth, axis=axis)
+        return x[:, :, kth]
+
+    @testing.numpy_cupy_equal()
+    def test_partition_none_axis(self, xp):
+        if self.external:
+            a = testing.shaped_random((2, 2), xp)
+            kth = 2
+            axis = None
+            x = self.partition(a, kth, axis=axis)
+            return x[kth]
+        else:
+            return None
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_partition_invalid_axis1(self, xp):
+        a = testing.shaped_random((2, 2, 2), xp)
+        kth = 2
+        axis = 3
+        return self.partition(a, kth, axis=axis)
+
+    def test_partition_invalid_axis2(self):
+        a = testing.shaped_random((2, 2, 2), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            kth = 2
+            axis = 3
+            return self.partition(a, kth, axis=axis)
+
+    @testing.with_requires('numpy>=1.13')
+    @testing.numpy_cupy_raises()
+    def test_partition_invalid_negative_axis1(self, xp):
+        a = testing.shaped_random((2, 2, 2), xp)
+        kth = 2
+        axis = -4
+        return self.partition(a, kth, axis=axis)
+
+    def test_partition_invalid_negative_axis2(self):
+        a = testing.shaped_random((2, 2, 2), cupy)
+        with self.assertRaises(cupy.core.core._AxisError):
+            kth = 2
+            axis = -4
+            return self.partition(a, kth, axis=axis)
