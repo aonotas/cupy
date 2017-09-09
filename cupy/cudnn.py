@@ -277,6 +277,23 @@ def create_rnn_descriptor(hidden_size, num_layers, dropout_desc,
     return desc
 
 
+def create_rnn_descriptor_v6(handle,
+                             hidden_size, num_layers, dropout_desc,
+                             input_mode, direction, mode, algo, data_type,
+                             minibatch):
+    desc = Descriptor(cudnn.createRNNDescriptor(),
+                      cudnn.destroyRNNDescriptor)
+    cudnn.setRNNDescriptor_v6(
+        handle, desc.value, hidden_size, num_layers, dropout_desc.value,
+        input_mode, direction, mode, algo, data_type)
+    # Persistent RNN
+    plan = Descriptor(cudnn.createPersistentRNNPlan(desc.value, minibatch,
+                                                    data_type),
+                      cudnn.destroyPersistentRNNPlan)
+    cudnn.setPersistentRNNPlan(desc.value, plan.value)
+    return desc
+
+
 def get_rnn_lin_layer_matrix_params(
         handle, rnn_desc, layer, x_desc, w_desc, w, lin_layer_id):
     mat_desc = Descriptor(cudnn.createFilterDescriptor(),
