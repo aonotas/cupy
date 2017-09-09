@@ -1084,7 +1084,7 @@ cpdef size_t createPersistentRNNPlan(
     cdef PersistentRNNPlan plan
     status = cudnnCreatePersistentRNNPlan(
         <RNNDescriptor>rnnDesc,
-        <int*>minibatch, <DataType>dataType, &plan)
+        <int>minibatch, <DataType>dataType, &plan)
     check_status(status)
     return <size_t>plan
 
