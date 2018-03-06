@@ -337,6 +337,15 @@ def create_rnn_descriptor(hidden_size, num_layers, dropout_desc,
     return desc
 
 
+def create_rnn_persistent_rnn_plan(desc, minibatch, data_type):
+    # Persistent RNN (when algo == 'CUDNN_RNN_ALGO_PERSIST_DYNAMIC')
+    plan = Descriptor(cudnn.createPersistentRNNPlan(desc.value, minibatch,
+                                                    data_type),
+                      py_cudnn.destroyPersistentRNNPlan)
+    cudnn.setPersistentRNNPlan(desc.value, plan.value)
+    return desc
+
+
 def get_rnn_lin_layer_matrix_params(
         handle, rnn_desc, layer, x_desc, w_desc, core.ndarray w, lin_layer_id):
     cdef size_t ptr = 0
