@@ -342,7 +342,7 @@ def create_rnn_persistent_rnn_plan(desc, minibatch, data_type):
     plan = Descriptor(cudnn.createPersistentRNNPlan(desc.value, minibatch,
                                                     data_type),
                       py_cudnn.destroyPersistentRNNPlan)
-    return desc
+    return plan
 
 
 def set_rnn_persistent_rnn_plan(desc, plan):
